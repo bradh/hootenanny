@@ -43,6 +43,7 @@
 #include <hoot/core/elements/ElementConverter.h>
 #include <hoot/core/elements/NodeToWayMap.h>
 #include <hoot/core/elements/OsmUtils.h>
+#include <hoot/core/elements/WayUtils.h>
 #include <hoot/core/index/OsmMapIndex.h>
 #include <hoot/core/io/OsmMapWriterFactory.h>
 #include <hoot/core/ops/IdSwapOp.h>
@@ -785,53 +786,93 @@ void HighwaySnapMerger::_snapEnds(const OsmMapPtr& map, ElementPtr snapee, Eleme
   //LOG_VART(snapTo);
 }
 
+bool HighwaySnapMerger::_meetsSnapRequirements(const OsmMapPtr& map, WayPtr snapee,
+                                               WayPtr snapTo, NodePtr replacedNode) const
+{
+  // If the node being replaced due to the snapping is a highway=crossing, the way we're snapping
+  // is a highway=footway, the way we're snapping to is not a highway=footway, and the way being
+  // snapped to intersects with at least one highway=footway way, then skip the snapping.
+  LOG_VART(replacedNode->getTags().get("highway") == "crossing");
+  LOG_VART(snapee->getTags().get("highway") == "footway");
+  LOG_VART(snapTo->getTags().get("highway") != "footway");
+  LOG_VART(WayUtils::wayIntersectsWithWayHavingKvp(snapTo->getId(), "highway=footway", map));
+  return
+    !(replacedNode->getTags().get("highway") == "crossing" &&
+      snapee->getTags().get("highway") == "footway" &&
+      snapTo->getTags().get("highway") != "footway" &&
+      !WayUtils::wayIntersectsWithWayHavingKvp(snapTo->getId(), "highway=footway", map));
+}
+
 void HighwaySnapMerger::_snapEnds(const OsmMapPtr& map, WayPtr snapee, WayPtr middle,
                                   WayPtr snapTo) const
 {
+  // TODO: This isn't working for #3901
+  // TODO: make _snapEnd method
+
   // TODO: This is a hack for now, as one single test (highway-search-radius-1) has highway=road
   // which makes no sense on a node. Want to think about it a little more before deciding to modify
   // the test's input data.
-   const QStringList nodeKvpExcludeList("highway=road");
-   NodePtr replacedNode;
-   NodePtr replacementNode;
+  const QStringList nodeKvpExcludeList("highway=road");
+  NodePtr replacedNode;
+  NodePtr replacementNode;
 
   replacedNode = map->getNode(middle->getNodeId(0));
   replacementNode = map->getNode(snapTo->getNodeId(0));
-  LOG_TRACE(
-    "Replacing " << replacedNode->getElementId() << " with " << replacementNode->getElementId() <<
-    " on " << snapee->getElementId() << "...");
-  // replace the node
-  snapee->replaceNode(middle->getNodeId(0), snapTo->getNodeId(0));
-  // If the node we just replaced has info and the one we're replacing it with does not, let's copy
-  // that info over to the replacement.
-  if (replacedNode->getTags().hasInformationTag() &&
-      !replacementNode->getTags().hasInformationTag() &&
-      !replacedNode->getTags().hasAnyKvp(nodeKvpExcludeList))
+
+  if (_meetsSnapRequirements(map, snapee, snapTo, replacedNode))
   {
-    replacementNode->setTags(
-      TagMergerFactory::mergeTags(
-        replacementNode->getTags(), replacedNode->getTags(), ElementType::Node));
+    LOG_TRACE(
+     "Replacing " << replacedNode->getElementId() << " with " << replacementNode->getElementId() <<
+     " on " << snapee->getElementId() << "...");
+    // replace the node
+    snapee->replaceNode(middle->getNodeId(0), snapTo->getNodeId(0));
+    // If the node we just replaced has info and the one we're replacing it with does not, let's copy
+    // that info over to the replacement.
+    if (replacedNode->getTags().hasInformationTag() &&
+        !replacementNode->getTags().hasInformationTag() &&
+        !replacedNode->getTags().hasAnyKvp(nodeKvpExcludeList))
+    {
+      replacementNode->setTags(
+        TagMergerFactory::mergeTags(
+          replacementNode->getTags(), replacedNode->getTags(), ElementType::Node));
+    }
+    // Let's also preserve relation membership.
+    RelationMemberSwapper::swap(
+      replacedNode->getElementId(), replacementNode->getElementId(), map, false);
   }
-  // Let's also preserve relation membership.
-  RelationMemberSwapper::swap(
-    replacedNode->getElementId(), replacementNode->getElementId(), map, false);
+  else
+  {
+    LOG_TRACE(
+      "Skipping replacing " << replacedNode->getElementId() << " with " <<
+      replacementNode->getElementId() << " on " << snapee->getElementId() << "...");
+  }
 
   replacedNode = map->getNode(middle->getLastNodeId());
   replacementNode = map->getNode(snapTo->getLastNodeId());
-  LOG_TRACE(
-    "Replacing " << replacedNode->getElementId() << " with " << replacementNode->getElementId() <<
-    " on " << snapee->getElementId() << "...");
-  snapee->replaceNode(middle->getLastNodeId(), snapTo->getLastNodeId());
-  if (replacedNode->getTags().hasInformationTag() &&
-      !replacementNode->getTags().hasInformationTag() &&
-      !replacedNode->getTags().hasAnyKvp(nodeKvpExcludeList))
+
+  if (_meetsSnapRequirements(map, snapee, snapTo, replacedNode))
   {
-    replacementNode->setTags(
-      TagMergerFactory::mergeTags(
-        replacementNode->getTags(), replacedNode->getTags(), ElementType::Node));
+    LOG_TRACE(
+      "Replacing " << replacedNode->getElementId() << " with " << replacementNode->getElementId() <<
+      " on " << snapee->getElementId() << "...");
+    snapee->replaceNode(middle->getLastNodeId(), snapTo->getLastNodeId());
+    if (replacedNode->getTags().hasInformationTag() &&
+        !replacementNode->getTags().hasInformationTag() &&
+        !replacedNode->getTags().hasAnyKvp(nodeKvpExcludeList))
+    {
+      replacementNode->setTags(
+        TagMergerFactory::mergeTags(
+          replacementNode->getTags(), replacedNode->getTags(), ElementType::Node));
+    }
+    RelationMemberSwapper::swap(
+      replacedNode->getElementId(), replacementNode->getElementId(), map, false);
   }
-  RelationMemberSwapper::swap(
-    replacedNode->getElementId(), replacementNode->getElementId(), map, false);
+  else
+  {
+    LOG_TRACE(
+      "Skipping replacing " << replacedNode->getElementId() << " with " <<
+      replacementNode->getElementId() << " on " << snapee->getElementId() << "...");
+  }
 }
 
 void HighwaySnapMerger::_splitElement(const OsmMapPtr& map, const WaySublineCollection& s,
@@ -865,8 +906,10 @@ void HighwaySnapMerger::_splitElement(const OsmMapPtr& map, const WaySublineColl
     RelationPtr r;
     if (!scrap || scrap->getElementType() == ElementType::Way)
     {
-      r.reset(new Relation(splitee->getStatus(), map->createNextRelationId(),
-                           splitee->getCircularError(), MetadataTags::RelationMultilineString()));
+      r.reset(
+        new Relation(
+          splitee->getStatus(), map->createNextRelationId(), splitee->getCircularError(),
+          MetadataTags::RelationMultilineString()));
       if (scrap)
       {
         r->addElement("", scrap);
@@ -975,7 +1018,7 @@ void HighwaySnapMerger::_splitElement(const OsmMapPtr& map, const WaySublineColl
     // Make sure the tags are still legit on the scrap.
     scrap->setTags(splitee->getTags());
     // With the merging switching between split ways and relations, it gets a little hard to keep
-    // track of where this tags is needed, so one final check here to make sure it gets added
+    // track of where this tag is needed, so one final check here to make sure it gets added
     // correctly.
     if (_markAddedMultilineStringRelations && multiLineStringAdded &&
         scrap->getElementType() == ElementType::Relation)

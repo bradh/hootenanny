@@ -98,6 +98,8 @@ private:
    */
   void _snapEnds(const OsmMapPtr& map, ElementPtr snapee, ElementPtr snapTo) const;
   void _snapEnds(const OsmMapPtr& map, WayPtr snapee, WayPtr middle, WayPtr snapTo) const;
+  bool _meetsSnapRequirements(const OsmMapPtr& map, WayPtr snapee, WayPtr snapTo,
+                              NodePtr replacedNode) const;
 
   /**
    * Splits the splitee up into a match element and a scrap element. All the tags are assigned
