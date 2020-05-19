@@ -225,7 +225,9 @@ WayLocation WayLocation::createAtEndOfWay(const ConstOsmMapPtr& map, const Const
 
 const Coordinate WayLocation::getCoordinate() const
 {
+  LOG_VARD(_way.get());
   ConstNodePtr p0 = _map->getNode(_way->getNodeId(_segmentIndex));
+  LOG_VARD(p0.get());
   if (_segmentFraction <= 0.0)
   {
     return p0->toCoordinate();
@@ -233,6 +235,7 @@ const Coordinate WayLocation::getCoordinate() const
   else
   {
     ConstNodePtr p1 = _map->getNode(_way->getNodeId(_segmentIndex + 1));
+    LOG_VARD(p1.get());
     return pointAlongSegmentByFraction(p0->toCoordinate(), p1->toCoordinate(), _segmentFraction);
   }
 }
@@ -247,10 +250,13 @@ ConstNodePtr WayLocation::getNode(double epsilon) const
   // Round to the appropriate segment index. This may be necessary due to floating point errors.
   if (_segmentFraction >= 0.5)
   {
+    // TODO: remove
+    LOG_TRACE("test7");
     return _map->getNode(getWay()->getNodeId(_segmentIndex + 1));
   }
   else
   {
+    LOG_TRACE("test8");
     return _map->getNode(getWay()->getNodeId(_segmentIndex));
   }
 }

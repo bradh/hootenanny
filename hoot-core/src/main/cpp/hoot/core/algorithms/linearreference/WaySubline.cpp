@@ -182,11 +182,16 @@ WayPtr WaySubline::toWay(const OsmMapPtr& map, GeometryConverter::NodeFactory* n
 
   if (!_start.isNode())
   {
+    // TODO: remove
+    LOG_DEBUG("test1");
     Coordinate c = _start.getCoordinate();
+    LOG_VARD(way.get());
     NodePtr n = nf->createNode(map, c, way->getStatus(), ce);
+    LOG_VARD(n.get());
     map->addNode(n);
     result->addNode(n->getId());
   }
+  LOG_TRACE("test2");
 
   for (int i = includedStartIndex; i <= includedEndIndex; i++)
   {
@@ -195,11 +200,14 @@ WayPtr WaySubline::toWay(const OsmMapPtr& map, GeometryConverter::NodeFactory* n
 
   if (!_end.isNode())
   {
+    LOG_DEBUG("test3");
     Coordinate c = _end.getCoordinate();
     NodePtr n = nf->createNode(map, c, way->getStatus(), ce);
+    LOG_VARD(n.get());
     map->addNode(n);
     result->addNode(n->getId());
   }
+  LOG_TRACE("test4");
 
   return result;
 }

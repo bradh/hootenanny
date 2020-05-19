@@ -45,10 +45,10 @@
 #include <hoot/js/util/StringUtilsJs.h>
 #include <hoot/core/algorithms/linearreference/WaySublineCollection.h>
 #include <hoot/core/elements/ElementConverter.h>
+#include <hoot/core/visitors/CalculateHashVisitor.h>
 
 // Qt
 #include <QStringList>
-#include <QElapsedTimer>
 
 using namespace std;
 using namespace v8;
@@ -57,7 +57,8 @@ namespace hoot
 {
 
 int SublineStringMatcherJs::logWarnCount = 0;
-QHash<QString, WaySublineMatchString> SublineStringMatcherJs::_sublineMatchCache;
+QHash<QString, WaySublineMatchStringPtr> SublineStringMatcherJs::_sublineMatchCache;
+ConstOsmMapPtr SublineStringMatcherJs::_map;
 
 HOOT_JS_REGISTER(SublineStringMatcherJs)
 
@@ -83,10 +84,31 @@ QString SublineStringMatcherJs::getSublineMatchKey(
   }
 }
 
-WaySublineMatchString SublineStringMatcherJs::getSublineMatch(
+QString SublineStringMatcherJs::getSublineMatchKey2(
+  const ConstElementPtr& element1, const ConstElementPtr& element2)
+{
+  CalculateHashVisitor hasher;
+  hasher.setOsmMap(_map.get());
+  if (element1->getElementId() < element2->getElementId())
+  {
+    return hasher.toHashString(element1) + "," + hasher.toHashString(element2);
+  }
+  else
+  {
+    return hasher.toHashString(element2) + "," + hasher.toHashString(element1);
+  }
+}
+
+WaySublineMatchStringPtr SublineStringMatcherJs::getSublineMatch(
   const ElementId& elementId1, const ElementId& elementId2)
 {
   return _sublineMatchCache[getSublineMatchKey(elementId1, elementId2)];
+}
+
+WaySublineMatchStringPtr SublineStringMatcherJs::getSublineMatch2(
+  const ConstElementPtr& element1, const ConstElementPtr& element2)
+{
+  return _sublineMatchCache[getSublineMatchKey2(element1, element2)];
 }
 
 void SublineStringMatcherJs::extractMatchingSublines(const FunctionCallbackInfo<Value>& args)
@@ -101,6 +123,9 @@ void SublineStringMatcherJs::extractMatchingSublines(const FunctionCallbackInfo<
   ElementJs* e1Js = ObjectWrap::Unwrap<ElementJs>(args[1]->ToObject());
   ElementJs* e2Js = ObjectWrap::Unwrap<ElementJs>(args[2]->ToObject());
   ConstOsmMapPtr m = mapJs->getConstMap();
+  //OsmMapPtr m = mapJs->getMap();
+  _map = m;
+
   ConstElementPtr e1 = e1Js->getConstElement();
   ConstElementPtr e2 = e2Js->getConstElement();
 
@@ -108,19 +133,14 @@ void SublineStringMatcherJs::extractMatchingSublines(const FunctionCallbackInfo<
 
   try
   {
-    WaySublineMatchString match;
-//    const QString matchKey = getSublineMatchKey(e1->getElementId(), e2->getElementId());
-//    if (_sublineMatchCache.contains(matchKey))
-//    {
-//      match = _sublineMatchCache[matchKey];
-//      // TODO: change to trace
-//      LOG_TRACE("Subline cache hit for: " << matchKey);
-//    }
-//    else
-//    {
-      match = sm->findMatch(m, e1, e2);
-      //_sublineMatchCache[matchKey] = match;
-    //}
+    WaySublineMatchString match = sm->findMatch(m, e1, e2);
+
+    //const QString matchKey = getSublineMatchKey(e1->getElementId(), e2->getElementId());
+    const QString matchKey = getSublineMatchKey2(e1, e2);
+    if (!_sublineMatchCache.contains(matchKey))
+    {
+      _sublineMatchCache[matchKey] = WaySublineMatchStringPtr(new WaySublineMatchString(match));
+    }
 
     if (match.isEmpty())
     {

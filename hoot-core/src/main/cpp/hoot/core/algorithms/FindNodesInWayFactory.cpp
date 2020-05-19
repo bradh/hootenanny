@@ -58,6 +58,7 @@ NodePtr FindNodesInWayFactory::createNode(const OsmMapPtr& map,
   {
     long nid = *it;
     ConstNodePtr n = map->getNode(nid);
+    LOG_VART(n.get());
     if (n->toCoordinate() == c)
     {
       // if there are multiple corresponding nodes, throw an exception.
@@ -84,8 +85,8 @@ NodePtr FindNodesInWayFactory::createNode(const OsmMapPtr& map,
 
   if (result == std::numeric_limits<long>::max())
   {
-    NodePtr n =NodePtr(new Node(s, map->createNextNodeId(), c,
-      circularError));
+    NodePtr n = NodePtr(new Node(s, map->createNextNodeId(), c, circularError));
+    LOG_VART(n.get());
     map->addNode(n);
     result = n->getId();
     _nodesToSearch.insert(n->getId());

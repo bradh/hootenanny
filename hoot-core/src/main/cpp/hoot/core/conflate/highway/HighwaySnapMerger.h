@@ -66,7 +66,7 @@ public:
 
   virtual QString getName() const { return QString::fromStdString(className()); }
 
-  void setSublineMatch(WaySublineMatchString subline) { _sublineMatch = subline; }
+  void setSublineMatch(WaySublineMatchStringPtr subline) { _sublineMatch = subline; }
 
 protected:
 
@@ -80,7 +80,7 @@ protected:
 
   std::shared_ptr<SublineStringMatcher> _sublineMatcher;
   // TODO
-  WaySublineMatchString _sublineMatch;
+  WaySublineMatchStringPtr _sublineMatch;
 
   virtual bool _mergePair(const OsmMapPtr& map, ElementId eid1, ElementId eid2,
                           std::vector<std::pair<ElementId, ElementId>>& replaced);

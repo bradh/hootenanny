@@ -233,8 +233,14 @@ WayPtr WayString::copySimplifiedWayIntoMap(const ElementProvider& map, OsmMapPtr
     vector<long> newNids;
     if (subline.getFormer().isNode() == false)
     {
-      NodePtr n = NodePtr(new Node(w->getStatus(), destination->createNextNodeId(),
-                                   subline.getFormer().getCoordinate(), ce));
+      // TODO: remove
+      LOG_TRACE("test9");
+      NodePtr n =
+        NodePtr(
+          new Node(
+            w->getStatus(), destination->createNextNodeId(), subline.getFormer().getCoordinate(),
+            ce));
+      LOG_VART(n.get());
       destination->addNode(n);
       newNids.push_back(n->getId());
       formeri = subline.getFormer().getSegmentIndex() + 1;
@@ -258,8 +264,13 @@ WayPtr WayString::copySimplifiedWayIntoMap(const ElementProvider& map, OsmMapPtr
     // if the last location isn't on a node, create a new node for it
     if (subline.getLatter().isNode() == false)
     {
-      NodePtr n = NodePtr(new Node(w->getStatus(), destination->createNextNodeId(),
-        subline.getLatter().getCoordinate(), ce));
+      LOG_TRACE("test10");
+      NodePtr n =
+        NodePtr(
+          new Node(
+            w->getStatus(), destination->createNextNodeId(), subline.getLatter().getCoordinate(),
+            ce));
+      LOG_VART(n.get());
       destination->addNode(n);
       newNids.push_back(n->getId());
     }

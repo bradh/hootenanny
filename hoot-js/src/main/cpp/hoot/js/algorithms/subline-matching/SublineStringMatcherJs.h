@@ -59,8 +59,10 @@ public:
    * @param elementId2
    * @return
    */
-  static WaySublineMatchString getSublineMatch(const ElementId& elementId1,
-                                               const ElementId& elementId2);
+  static WaySublineMatchStringPtr getSublineMatch(const ElementId& elementId1,
+                                                  const ElementId& elementId2);
+  static WaySublineMatchStringPtr getSublineMatch2(const ConstElementPtr& element1,
+                                                   const ConstElementPtr& element2);
 
   /**
    * TODO
@@ -70,6 +72,8 @@ public:
    * @return
    */
   static QString getSublineMatchKey(const ElementId& elementId1, const ElementId& elementId2);
+  static QString getSublineMatchKey2(
+    const ConstElementPtr& element1, const ConstElementPtr& element2);
 
 private:
 
@@ -83,7 +87,8 @@ private:
   QString _className;
   SublineStringMatcherPtr _sm;
   // TODO
-  static QHash<QString, WaySublineMatchString> _sublineMatchCache;
+  static QHash<QString, WaySublineMatchStringPtr> _sublineMatchCache;
+  static ConstOsmMapPtr _map;
 };
 
 inline void toCpp(v8::Handle<v8::Value> v, SublineStringMatcherPtr& ptr)

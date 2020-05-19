@@ -28,10 +28,13 @@
 #define CALCULATEHASHVISITOR_H
 
 // hoot
-#include <hoot/core/visitors/ElementOsmMapVisitor.h>
+//#include <hoot/core/visitors/ElementOsmMapVisitor.h>
 #include <hoot/core/elements/Node.h>
 #include <hoot/core/elements/Way.h>
 #include <hoot/core/elements/Relation.h>
+#include <hoot/core/elements/ElementVisitor.h>
+#include <hoot/core/elements/ConstOsmMapConsumer.h>
+#include <hoot/core/elements/OsmMap.h>
 
 namespace hoot
 {
@@ -47,7 +50,7 @@ namespace hoot
  *
  * @todo implement OperationStatusInfo
  */
-class CalculateHashVisitor : public ElementOsmMapVisitor
+class CalculateHashVisitor : public ElementVisitor, public ConstOsmMapConsumer//public ElementOsmMapVisitor
 {
 public:
 
@@ -55,7 +58,9 @@ public:
 
   CalculateHashVisitor();
 
-  virtual void visit(const ElementPtr &e);
+  virtual void visit(const ElementPtr& e);
+
+  virtual void setOsmMap(const OsmMap* map) { _map = map->shared_from_this(); }
 
   QString toJson(const ConstElementPtr& e);
   QByteArray toHash(const ConstElementPtr& e);
@@ -87,6 +92,8 @@ private:
   QMap<QString, ElementId> _hashesToElementIds;
   // pairings of all duplicate elements found
   QSet<std::pair<ElementId, ElementId>> _duplicates;
+
+  ConstOsmMapPtr _map;
 
   QString _toJson(const ConstNodePtr& node);
   QString _toJson(const ConstWayPtr& way);

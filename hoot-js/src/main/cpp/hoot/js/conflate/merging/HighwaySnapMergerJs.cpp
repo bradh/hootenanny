@@ -143,19 +143,29 @@ void HighwaySnapMergerJs::apply(const FunctionCallbackInfo<Value>& args)
     snapMerger.reset(new HighwaySnapMerger(pairs, sublineMatcher));
   }
   snapMerger->setMatchedBy(matchedBy);
-//  if (pairs.size() == 1)
-//  {
-//    const std::pair<ElementId, ElementId> pair = *pairs.begin();
-//    WaySublineMatchString cachedSublineMatch =
-//      SublineStringMatcherJs::getSublineMatch(pair.first, pair.second);
-//    snapMerger->setSublineMatch(cachedSublineMatch);
-//    if (!cachedSublineMatch.isEmpty())
-//    {
-//      LOG_TRACE(
-//        "Subline cache hit for: " <<
-//        SublineStringMatcherJs::getSublineMatchKey(pair.first, pair.second));
-//    }
-//  }
+  WaySublineMatchStringPtr cachedSublineMatch;
+  if (pairs.size() == 1)
+  {
+    const std::pair<ElementId, ElementId> pair = *pairs.begin();
+    //cachedSublineMatch = SublineStringMatcherJs::getSublineMatch(pair.first, pair.second);
+    ConstElementPtr element1 = map->getElement(pair.first);
+    ConstElementPtr element2 = map->getElement(pair.second);
+    if (element1 && element2)
+    {
+      cachedSublineMatch = SublineStringMatcherJs::getSublineMatch2(element1, element2);
+      if (cachedSublineMatch && !cachedSublineMatch->isEmpty())
+      {
+        // TODO: change to trace
+  //      LOG_DEBUG(
+  //        "Subline cache hit for: " <<
+  //        SublineStringMatcherJs::getSublineMatchKey(pair.first, pair.second));
+        LOG_DEBUG(
+          "Subline cache hit for: " <<
+          SublineStringMatcherJs::getSublineMatchKey2(element1, element2));
+      }
+    }
+  }
+  snapMerger->setSublineMatch(cachedSublineMatch);
   snapMerger->apply(map, replaced);
 
   // modify the parameter that was passed in

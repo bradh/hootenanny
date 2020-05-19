@@ -31,7 +31,6 @@
 #include <hoot/core/util/Factory.h>
 #include <hoot/core/util/ConfigOptions.h>
 #include <hoot/core/elements/ElementConverter.h>
-//#include <hoot/core/criterion/LinearWaterwayCriterion.h>
 
 namespace hoot
 {
@@ -63,10 +62,10 @@ void RiverSnapMerger::setConfiguration(const Settings& conf)
 
 WaySublineMatchString RiverSnapMerger::_matchSubline(OsmMapPtr map, ElementPtr e1, ElementPtr e2)
 {
-//  if (!_sublineMatch.isEmpty())
-//  {
-//    return _sublineMatch;
-//  }
+  if (_sublineMatch && !_sublineMatch->isEmpty())
+  {
+    return *_sublineMatch;
+  }
 
   if (e1->getElementType() == ElementType::Way && e2->getElementType() == ElementType::Way &&
       isLongWayPair(

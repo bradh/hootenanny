@@ -319,8 +319,12 @@ void WayMatchStringMerger::_moveNode(ElementId scrapNodeId, WayLocation wl1)
   // if we're merging a node onto a node
   if (wl1.isNode(WayLocation::SLOPPY_EPSILON))
   {
+    // TODO: remove
+    LOG_TRACE("test5");
     NodePtr n1 = _map->getNode(wl1.getNode(WayLocation::SLOPPY_EPSILON)->getElementId());
+    LOG_VART(n1.get());
     NodePtr n2 = scrapNode;
+    LOG_VART(n2.get());
     Tags t = _tagMerger->mergeTags(n1->getTags(), n2->getTags(), ElementType::Node);
 
     _map->replaceNode(n2->getId(), n1->getId());
@@ -331,8 +335,10 @@ void WayMatchStringMerger::_moveNode(ElementId scrapNodeId, WayLocation wl1)
   }
   else
   {
+    LOG_TRACE("test6");
     // get a non-const version of the way so we can modify it.
     WayPtr w = _map->getWay(wl1.getWay()->getElementId());
+    LOG_VART(w.get());
     // grab the previous nodes and insert the new one.
     vector<long> nids = w->getNodeIds();
     nids.insert(nids.begin() + wl1.getSegmentIndex() + 1, scrapNodeId.getId());
