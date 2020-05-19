@@ -103,7 +103,7 @@ void PartialNetworkMerger::_applyMerger(const OsmMapPtr& map, WayMatchStringMerg
 {
   LOG_DEBUG("Applying PartialNetworkMerger...");
 
-  // we changed the sublines so we must update the indices.
+  // We changed the sublines, so we must update the indices.
   merger->updateSublineMapping();
 
   WayStringPtr str2 = merger->getMapping()->getWayString2();
@@ -140,9 +140,8 @@ void PartialNetworkMerger::_applyMerger(const OsmMapPtr& map, WayMatchStringMerg
     }
   }
 
-  // TODO: this will need to replace one scrap with possibly multiple keeper elements
-  // - think about the case when the way is part of an interstate or bus relation
-  // remove the duplicate element.
+  // TODO: This will need to replace one scrap with possibly multiple keeper elements. Think about
+  // the case when the way is part of an interstate or bus relation remove the duplicate element.
   merger->replaceScraps();
 }
 

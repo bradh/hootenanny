@@ -87,10 +87,8 @@ exports.matchScore = function(map, e1, e2)
 
   // extract the sublines needed for matching
   var sublines = sublineMatcher.extractMatchingSublines(map, e1, e2);
-  if (sublines) {
-    //result = { match: 1.0, explain:"match" };
-    //return result;
-
+  if (sublines) 
+  {
     var m = sublines.map;
     var m1 = sublines.match1;
     var m2 = sublines.match2;
@@ -101,7 +99,8 @@ exports.matchScore = function(map, e1, e2)
 
     var attribs = [distanceScore, edgeDistance, hausdorffDistance];
     var classification = WekaClassifier.classify(attribs);
-    if (0 === classification) {
+    if (0 === classification) 
+    {
       hoot.trace("Found Match!");
       result = { match: 1.0, explain:"match" };
     }
