@@ -40,6 +40,7 @@
 #include <hoot/core/util/Log.h>
 #include <hoot/core/visitors/NodesVisitor.h>
 #include <hoot/core/util/Factory.h>
+#include <hoot/core/io/OsmMapWriterFactory.h>
 
 using namespace std;
 
@@ -87,6 +88,9 @@ void PartialNetworkMerger::_appendSublineMappings(
 void PartialNetworkMerger::apply(const OsmMapPtr& map,
                                  vector<pair<ElementId, ElementId>>& replaced)
 {
+  // ENABLE THE OsmMapWriterFactory::writeDebugMap CALLS FOR SMALL DATASETS DURING DEBUGGING ONLY.
+  // writes a map file for each road merge
+
   _mergerList.clear();
 
   if (_edgeMatches.size() == 1 && (*_edgeMatches.begin())->containsStub())
@@ -103,13 +107,13 @@ void PartialNetworkMerger::_applyMerger(const OsmMapPtr& map, WayMatchStringMerg
 {
   LOG_DEBUG("Applying PartialNetworkMerger...");
 
-  // we changed the sublines so we must update the indices.
+  // We changed the sublines, so we must update the indices.
   merger->updateSublineMapping();
 
   WayStringPtr str2 = merger->getMapping()->getWayString2();
 
   merger->mergeTags();
-  // set the status on all keeper ways to conflated.
+  // Set the status on all keeper ways to conflated.
   merger->setKeeperStatus(Status::Conflated);
   ConfigOptions conf;
   if (conf.getWriterIncludeDebugTags() && conf.getWriterIncludeMatchedByTag())
@@ -117,6 +121,7 @@ void PartialNetworkMerger::_applyMerger(const OsmMapPtr& map, WayMatchStringMerg
     Tags tagsToAdd(MetadataTags::HootMatchedBy(), HighwayMatch::MATCH_NAME);
     merger->addKeeperTags(tagsToAdd);
   }
+  //OsmMapWriterFactory::writeDebugMap(map, "PartialNetworkMerger-after-merge-tags");
 
   // go through all the nodes in the scrap
   QList<ConstNodePtr> scrapNodeList;
@@ -132,11 +137,15 @@ void PartialNetworkMerger::_applyMerger(const OsmMapPtr& map, WayMatchStringMerg
       // move corresponding intersection nodes and non-empty nodes into the keeper segments and
       // make sure the interesection snaps to a start/end node of a way
       merger->mergeIntersection(n->getElementId());
+
+      //OsmMapWriterFactory::writeDebugMap(map, "PartialNetworkMerger-after-merge-intersection");
     }
     else if (n->getTags().getInformationCount() > 0)
     {
       // move corresponding intersection nodes and non-empty nodes into the keeper segments.
       merger->mergeNode(n->getElementId());
+
+      //OsmMapWriterFactory::writeDebugMap(map, "PartialNetworkMerger-after-merge-node");
     }
   }
 
@@ -144,6 +153,7 @@ void PartialNetworkMerger::_applyMerger(const OsmMapPtr& map, WayMatchStringMerg
   // - think about the case when the way is part of an interstate or bus relation
   // remove the duplicate element.
   merger->replaceScraps();
+  //OsmMapWriterFactory::writeDebugMap(map, "PartialNetworkMerger-after-replace-scraps");
 }
 
 WayMatchStringMergerPtr PartialNetworkMerger::_createMatchStringMerger(const OsmMapPtr& map,
@@ -242,12 +252,18 @@ void PartialNetworkMerger::_processFullMatch(const OsmMapPtr& map,
     LOG_TRACE("Applying way splits...");
     WayMatchStringSplitter splitter;
     splitter.applySplits(map, replaced, _allSublineMappings);
+    //OsmMapWriterFactory::writeDebugMap(map, "PartialNetworkMerger-after-full-match-split");
 
     // apply merge operations on the split ways.
     LOG_TRACE("Merging split ways...");
+    //int ctr = 1;
     foreach (WayMatchStringMergerPtr merger, _mergerList)
     {
       _applyMerger(map, merger);
+
+      //OsmMapWriterFactory::writeDebugMap(
+        //map, "PartialNetworkMerger-after-applied-merger-" + QString::number(ctr));
+      //ctr++;
     }
   }
   catch (NeedsReviewException& e)
@@ -296,6 +312,9 @@ void PartialNetworkMerger::_processStubMatch(const OsmMapPtr& map,
     {
       RecursiveElementRemover(mapEid(e->getElementId())).apply(map);
     }
+
+    //OsmMapWriterFactory::writeDebugMap(
+     //map, "PartialNetworkMerger-after-stub1-secondary-removal-" + edgeMatch->toString());
   }
   else if (edgeMatch->getString2()->isStub())
   {

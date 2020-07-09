@@ -40,28 +40,31 @@
 #include <hoot/core/util/Log.h>
 #include <hoot/core/conflate/highway/HighwayMatch.h>
 #include <hoot/core/elements/TagUtils.h>
+#include <hoot/core/io/OsmMapWriterFactory.h>
 
 namespace hoot
 {
 
 HOOT_FACTORY_REGISTER(Merger, HighwayTagOnlyMerger)
 
-HighwayTagOnlyMerger::HighwayTagOnlyMerger(const std::set<std::pair<ElementId, ElementId>>& pairs,
-                                           std::shared_ptr<PartialNetworkMerger> networkMerger)
-  : HighwaySnapMerger(pairs, std::shared_ptr<SublineStringMatcher>()),
-      _performBridgeGeometryMerging(
-      ConfigOptions().getAttributeConflationAllowRefGeometryChangesForBridges()),
-      _networkMerger(networkMerger)
+HighwayTagOnlyMerger::HighwayTagOnlyMerger(
+  const std::set<std::pair<ElementId, ElementId>>& pairs,
+  std::shared_ptr<PartialNetworkMerger> networkMerger) :
+HighwaySnapMerger(pairs, std::shared_ptr<SublineStringMatcher>()),
+_performBridgeGeometryMerging(
+ConfigOptions().getAttributeConflationAllowRefGeometryChangesForBridges()),
+_networkMerger(networkMerger)
 {
   _removeTagsFromWayMembers = false;
   _markAddedMultilineStringRelations = true;
 }
 
-HighwayTagOnlyMerger::HighwayTagOnlyMerger(const std::set<std::pair<ElementId, ElementId>>& pairs,
-                                           const std::shared_ptr<SublineStringMatcher>& sublineMatcher)
-  : HighwaySnapMerger(pairs, sublineMatcher),
-      _performBridgeGeometryMerging(
-      ConfigOptions().getAttributeConflationAllowRefGeometryChangesForBridges())
+HighwayTagOnlyMerger::HighwayTagOnlyMerger(
+  const std::set<std::pair<ElementId, ElementId>>& pairs,
+  const std::shared_ptr<SublineStringMatcher>& sublineMatcher) :
+HighwaySnapMerger(pairs, sublineMatcher),
+_performBridgeGeometryMerging(
+ConfigOptions().getAttributeConflationAllowRefGeometryChangesForBridges())
 {
   _removeTagsFromWayMembers = false;
   _markAddedMultilineStringRelations = true;
@@ -100,6 +103,13 @@ void HighwayTagOnlyMerger::_determineKeeperFeature(ElementPtr element1, ElementP
 bool HighwayTagOnlyMerger::_mergePair(const OsmMapPtr& map, ElementId eid1, ElementId eid2,
   std::vector<std::pair<ElementId, ElementId>>& replaced)
 {
+  // How is this possible?
+  if (eid1 == eid2)
+  {
+    LOG_WARN("Skipping merging the same element: " << eid1);
+    return false;
+  }
+
   ElementPtr e1 = map->getElement(eid1);
   ElementPtr e2 = map->getElement(eid2);
 
@@ -108,6 +118,10 @@ bool HighwayTagOnlyMerger::_mergePair(const OsmMapPtr& map, ElementId eid1, Elem
     LOG_TRACE("One element missing.  Marking for review...");
     return HighwayMergerAbstract::_mergePair(map, eid1, eid2, replaced);
   }
+
+  // ENABLE THE OsmMapWriterFactory::writeDebugMap CALLS FOR SMALL DATASETS DURING DEBUGGING ONLY.
+  // writes a map file for each road merge
+  //const QString eidLogString = "-" + eid1.toString() + "-" + eid2.toString();
 
   LOG_TRACE("HighwayTagOnlyMerger: e1\n" << OsmUtils::getElementDetailString(e1, map));
   LOG_TRACE("HighwayTagOnlyMerger: e2\n" << OsmUtils::getElementDetailString(e2, map));
@@ -130,11 +144,15 @@ bool HighwayTagOnlyMerger::_mergePair(const OsmMapPtr& map, ElementId eid1, Elem
     {
       mergerName = HighwaySnapMerger::className();
       needsReview = HighwaySnapMerger::_mergePair(map, eid1, eid2, replaced);
+      //OsmMapWriterFactory::writeDebugMap(
+       //map, "HighwayTagOnlyMerger-after-merge-pair" + eidLogString);
     }
     else
     {
       mergerName = PartialNetworkMerger::className();
       _networkMerger->apply(map, replaced);
+      //OsmMapWriterFactory::writeDebugMap(
+       //map, "HighwayTagOnlyMerger-after-network-merge" + eidLogString);
     }
     if (needsReview)
     {
@@ -149,6 +167,8 @@ bool HighwayTagOnlyMerger::_mergePair(const OsmMapPtr& map, ElementId eid1, Elem
 
   // copy relation tags back to their way members
   _copyTagsToWayMembers(e1, e2, map);
+  //OsmMapWriterFactory::writeDebugMap(
+   //map, "HighwayTagOnlyMerger-after-copy-tags-to-way-members" + eidLogString);
 
   // Merge the ways, bringing the secondary feature's attributes over to the reference feature.
 
@@ -179,8 +199,14 @@ bool HighwayTagOnlyMerger::_mergeWays(ElementPtr elementWithTagsToKeep,
     return false;
   }
 
+   const QString eidLogString =
+     "-" + elementWithTagsToKeep->getElementId().toString() + "-" +
+     elementWithTagsToRemove->getElementId().toString();
+
   // Reverse the way if way to remove is one way and the two ways aren't in similar directions
   _handleOneWayStreetReversal(elementWithTagsToKeep, elementWithTagsToRemove, map);
+  //OsmMapWriterFactory::writeDebugMap(
+   //map, "HighwayTagOnlyMerger-after-handling-one-way-street-reversal" + eidLogString);
 
   // TODO: This is ignoring the contents of multilinestring relations.
   // TODO: I think we need to bring information nodes from secondary ways here like we do in ref
@@ -207,6 +233,7 @@ bool HighwayTagOnlyMerger::_mergeWays(ElementPtr elementWithTagsToKeep,
   LOG_TRACE(
     "HighwayTagOnlyMerger: keeper element\n" <<
     OsmUtils::getElementDetailString(elementWithTagsToKeep, map));
+  //OsmMapWriterFactory::writeDebugMap(map, "HighwayTagOnlyMerger-after-tag-merging" + eidLogString);
 
   map->getIdSwap()->add(
     elementWithTagsToRemove->getElementId(), elementWithTagsToKeep->getElementId());
@@ -228,6 +255,18 @@ void HighwayTagOnlyMerger::_copyTagsToWayMembers(ElementPtr e1, ElementPtr e2, c
   // hope this isn't happening
   assert(!(e1->getElementType() == ElementType::Relation &&
            e2->getElementType() == ElementType::Relation));
+//  if (!(e1->getElementType() == ElementType::Relation &&
+//        e2->getElementType() == ElementType::Relation))
+//  {
+//    //LOG_WARN("Non-relation passed to _copyTagsToWayMembers");
+//    return;
+//  }
+//  if (e1->getElementType() == ElementType::Relation &&
+//      e2->getElementType() == ElementType::Relation)
+//  {
+//    //LOG_WARN("Non-relation passed to _copyTagsToWayMembers");
+//    return;
+//  }
 
   // handle relations coming from HighwaySnapMerger's previous handling of bridges
   if (e1->getElementType() == ElementType::Relation ||
@@ -242,6 +281,8 @@ void HighwayTagOnlyMerger::_copyTagsToWayMembers(ElementPtr e1, ElementPtr e2, c
     {
       relation = std::dynamic_pointer_cast<Relation>(e2);
     }
+    // TODO: change back to trace
+    LOG_VART(relation->getElementId());
 
     const std::vector<RelationData::Entry>& relationMembers = relation->getMembers();
     LOG_VART(relationMembers.size());
