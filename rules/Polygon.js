@@ -35,17 +35,18 @@ var overlapExtractor =
  */
 exports.isMatchCandidate = function(map, e)
 {
+  hoot.trace("e: " + e.getElementId());
+
   // If the poly is generic but part of a building relation we want Building Conflation to handle 
   // it instead.
+  hoot.trace("isMemberOfRelationInCategory building: " + isMemberOfRelationInCategory(map, e.getElementId(), "building"));
   if (isMemberOfRelationInCategory(map, e.getElementId(), "building"))
   {
     return false;
   }
 
-  //hoot.trace("e: " + e.getId());
-  //hoot.trace("isPolygon(e): " + isPolygon(e));
-  //hoot.trace("isSpecificallyConflatable(map, e, exports.geometryType): " + isSpecificallyConflatable(map, e, exports.geometryType));
-
+  hoot.trace("isPolygon: " + isPolygon(e));
+  hoot.trace("isSpecificallyConflatable: " + isSpecificallyConflatable(map, e, exports.geometryType));
   return isPolygon(e) && !isSpecificallyConflatable(map, e, exports.geometryType);
 };
 
