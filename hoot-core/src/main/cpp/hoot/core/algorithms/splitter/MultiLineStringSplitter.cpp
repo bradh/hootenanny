@@ -88,7 +88,7 @@ ElementPtr MultiLineStringSplitter::createSublines(const OsmMapPtr& map,
     nf = nfPtr.get();
   }
 
-  // extract all the sublines into ways.
+  // Extract all the sublines into ways.
   for (size_t i = 0; i < string.getSublines().size(); i++)
   {
     const WaySubline& subline = string.getSublines()[i];
@@ -108,12 +108,12 @@ ElementPtr MultiLineStringSplitter::createSublines(const OsmMapPtr& map,
     }
   }
 
-  // if there was one match then just return the way.
+  // If there was one match then just return the way.
   if (matches.size() == 1)
   {
     result = matches[0];
   }
-  // if there were multiple matches then create a relation to contain the matches.
+  // If there were multiple matches, then create a relation to contain the matches.
   else if (matches.size() > 1)
   {
     RelationPtr r(
@@ -152,16 +152,16 @@ void MultiLineStringSplitter::split(const OsmMapPtr& map, const WaySublineCollec
     nf = nfPtr.get();
   }
 
-  // rename the matches to the positive subline string
+  // Rename the matches to the positive subline string/
   const WaySublineCollection& positive = string;
-  // create an inversion of the WaySublineCollection
+  // Create an inversion of the WaySublineCollection.
   WaySublineCollection negative = string.invert();
 
-  // create all the sublines that fall within the positive WaySublineCollection and put them into
+  // Create all the sublines that fall within the positive WaySublineCollection and put them into
   // the match element.
   match = createSublines(map, positive, reverse, nf);
 
-  // create all the sublines that fall within the negative WaySublineCollection and put them into
+  // Create all the sublines that fall within the negative WaySublineCollection and put them into
   // the scraps element.
   vector<bool> reverseNegative(negative.getSublines().size(), false);
   scraps = createSublines(map, negative, reverseNegative, nf);

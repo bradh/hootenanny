@@ -253,20 +253,73 @@ bool RelationMemberUtils::containsOnlyMembersWithCriterion(
   return true;
 }
 
-std::vector<ConstRelationPtr> RelationMemberUtils::getContainingRelations(
+void RelationMemberUtils::addMembership(
+  const ElementId& childId, const QString& role, const std::vector<RelationPtr>& relations)
+{
+  for (std::vector<RelationPtr>::const_iterator it = relations.begin(); it != relations.end(); ++it)
+  {
+    RelationPtr relation = *it;
+    LOG_VART(relation.get());
+    if (relation)
+    {
+      relation->addElement(role, childId);
+    }
+  }
+}
+
+std::set<long> RelationMemberUtils::getOwningRelationIds(
   const ConstOsmMapPtr& map, const ElementId& childId)
 {
   LOG_VART(map.get());
   LOG_VART(childId);
 
-  std::vector<ConstRelationPtr> relations;
   const std::shared_ptr<ElementToRelationMap>& e2r = map->getIndex().getElementToRelationMap();
-  LOG_VART(e2r.get());
-  const std::set<long> relationIds = e2r->getRelationByElement(childId);
+  return e2r->getRelationByElement(map->getElement(childId));
+}
+
+std::vector<ConstRelationPtr> RelationMemberUtils::getOwningRelations(
+  const ConstOsmMapPtr& map, const ElementId& childId)
+{
+  std::vector<ConstRelationPtr> relations;
+  const std::set<long> relationIds = getOwningRelationIds(map, childId);
   LOG_VART(relationIds.size());
   for (std::set<long>::const_iterator it = relationIds.begin(); it != relationIds.end(); ++it)
   {
     ConstRelationPtr relation = map->getRelation(*it);
+    LOG_VART(relation.get());
+    if (relation)
+    {
+      relations.push_back(relation);
+    }
+  }
+  return relations;
+}
+
+std::vector<RelationMemberUtils::RelationRole> RelationMemberUtils::getOwningRelationsWithRoles(
+  const OsmMapPtr& map, const ElementId& childId)
+{
+  std::vector<RelationRole> relationsWithRoles;
+  const std::vector<RelationPtr>& relations = getOwningRelations(map, childId);
+  for (std::vector<RelationPtr>::const_iterator it = relations.begin(); it != relations.end(); ++it)
+  {
+    RelationPtr relation = *it;
+    RelationRole relationRole;
+    relationRole.relation = relation;
+    relationRole.role = relation->getMemberRoleById(childId);
+    relationsWithRoles.push_back(relationRole);
+  }
+  return relationsWithRoles;
+}
+
+std::vector<RelationPtr> RelationMemberUtils::getOwningRelations(
+  const OsmMapPtr& map, const ElementId& childId)
+{
+  std::vector<RelationPtr> relations;
+  const std::set<long> relationIds = getOwningRelationIds(map, childId);
+  LOG_VART(relationIds.size());
+  for (std::set<long>::const_iterator it = relationIds.begin(); it != relationIds.end(); ++it)
+  {
+    RelationPtr relation = map->getRelation(*it);
     LOG_VART(relation.get());
     if (relation)
     {
@@ -283,10 +336,10 @@ bool RelationMemberUtils::isMemberOfRelationSatisfyingCriterion(
   LOG_VART(childId);
   LOG_VART(criterion.toString());
 
-  std::vector<ConstRelationPtr> containingRelations = getContainingRelations(map, childId);
-  LOG_VART(containingRelations.size());
-  for (std::vector<ConstRelationPtr>::const_iterator it = containingRelations.begin();
-       it != containingRelations.end(); ++it)
+  std::vector<ConstRelationPtr> owningRelations = getOwningRelations(map, childId);
+  LOG_VART(owningRelations.size());
+  for (std::vector<ConstRelationPtr>::const_iterator it = owningRelations.begin();
+       it != owningRelations.end(); ++it)
   {
     if (criterion.isSatisfied(*it))
     {

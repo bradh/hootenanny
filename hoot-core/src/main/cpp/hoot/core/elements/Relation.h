@@ -126,6 +126,22 @@ public:
    */
   std::set<ElementId> getMemberIds(const ElementType& elementType = ElementType::Unknown) const;
 
+  /**
+   * Returns a relation member owned by this relation having a specified ID
+   *
+   * @param id the ID of the element to retrieve
+   * @return a relation member
+   */
+  RelationData::Entry getMemberById(const ElementId& id) const;
+
+  /**
+   * Returns the role of a relation member owned by this relation having a specified ID
+   *
+   * @param id the ID of the element to retrieve the role of
+   * @return a relation role
+   */
+  QString getMemberRoleById(const ElementId& id) const;
+
   virtual geos::geom::Envelope* getEnvelope(
     const std::shared_ptr<const ElementProvider>& ep) const override;
   virtual const geos::geom::Envelope& getEnvelopeInternal(

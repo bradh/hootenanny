@@ -47,6 +47,19 @@ bool LinearCriterion::isSatisfied(const ConstElementPtr& e) const
   {
     return false;
   }
+  else if (e->getElementType() == ElementType::Way)
+  {
+    ConstWayPtr way = std::dynamic_pointer_cast<const Way>(e);
+
+    if (way->isClosedArea())
+    {
+      LOG_TRACE(e->getElementId() << " is a closed area, so fails LinearCriterion.");
+      return false;
+    }
+
+    LOG_TRACE(e->getElementId() << " passes LinearCriterion.");
+    return true;
+  }
   else if (e->getElementType() == ElementType::Relation)
   {
     ConstRelationPtr relation = std::dynamic_pointer_cast<const Relation>(e);
@@ -55,27 +68,10 @@ bool LinearCriterion::isSatisfied(const ConstElementPtr& e) const
       LOG_TRACE(e->getElementId() << " is linear relation and passes LinearCriterion.");
       return true;
     }
-  }
-  else if (e->getElementType() == ElementType::Way)
-  {
-    ConstWayPtr way = std::dynamic_pointer_cast<const Way>(e);
 
-    if (way->isClosedArea())
-    {
-      LOG_TRACE("Way is a closed area, so fails LinearCriterion.");
-      return false;
-    }
-
-    LOG_TRACE(e->getElementId() << " passes LinearCriterion.");
-    return true;
-  }
-
-  // As part of #4137, we're allowing all types to be conflatable, so no schema checks are required.
-  // This relation only check has been left in to appease
-  // ServiceChangesetReplacementOutOfSpecRelationTest. #4149 should fix the problem, and this code
-  // block can then be removed.
-  if (e->getElementType() == ElementType::Relation)
-  {
+    // As part of #4137, we're allowing all types to be conflatable, so no schema checks are required.
+    // This relation only check has been left in to appease
+    // ServiceChangesetReplacementOutOfSpecRelationTest. Eventually it should be removed.
     const Tags& t = e->getTags();
     for (Tags::const_iterator it = t.constBegin(); it != t.constEnd(); ++it)
     {
@@ -90,6 +86,7 @@ bool LinearCriterion::isSatisfied(const ConstElementPtr& e) const
       // take care of weeding out any polys.
       if (g & OsmGeometries::LineString)
       {
+        LOG_TRACE(e->getElementId() << " passes LinearCriterion on schema check.");
         return true;
       }
     }

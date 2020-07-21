@@ -40,14 +40,10 @@ var sublineMatcher = new hoot.MaximalSublineStringMatcher({
 exports.isMatchCandidate = function(map, e)
 {
   hoot.trace("e: " + e.getElementId());
+  //hoot.trace("e: " + e);
+
   // Even though a route relation passes the linear crit, we want only highway or rail conflation to conflate it.
   if (e.getElementId().getType() == "Relation" && e.getTags().contains("route"))
-  {
-    return false;
-  }
-  // This prevents some of the problems seen in #4149. It should be removed after that issue is fixed.
-  else if (e.getElementId().getType() == "Way" && !hasType(e) &&
-           isMemberOfRelationSatisfyingCriterion(map, e.getElementId(), "hoot::CollectionRelationCriterion"))
   {
     return false;
   }

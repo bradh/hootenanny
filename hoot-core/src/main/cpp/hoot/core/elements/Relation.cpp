@@ -192,6 +192,34 @@ std::set<ElementId> Relation::getMemberIds(const ElementType& elementType) const
   return memberIds;
 }
 
+RelationData::Entry Relation::getMemberById(const ElementId& id) const
+{
+  const vector<RelationData::Entry>& members = getMembers();
+  for (size_t i = 0; i < members.size(); i++)
+  {
+    RelationData::Entry member = members[i];
+    if (member.getElementId() == id)
+    {
+      return member;
+    }
+  }
+  return RelationData::Entry();
+}
+
+QString Relation::getMemberRoleById(const ElementId& id) const
+{
+  const vector<RelationData::Entry>& members = getMembers();
+  for (size_t i = 0; i < members.size(); i++)
+  {
+    RelationData::Entry member = members[i];
+    if (member.getElementId() == id)
+    {
+      return member.getRole();
+    }
+  }
+  return "";
+}
+
 Envelope* Relation::getEnvelope(const std::shared_ptr<const ElementProvider>& ep) const
 {
   return new Envelope(getEnvelopeInternal(ep));

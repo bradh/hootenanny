@@ -63,6 +63,7 @@
 #include <hoot/core/criterion/NoInformationCriterion.h>
 #include <hoot/core/util/ConfigOptions.h>
 #include <hoot/core/util/Settings.h>
+#include <hoot/core/elements/RelationMemberUtils.h>
 
 // Qt
 #include <QSet>
@@ -257,6 +258,12 @@ bool HighwaySnapMerger::_mergePair(const OsmMapPtr& map, ElementId eid1, Element
     return false;
   }
 
+  // Store the owning relations, so our final merged element doesn't lose any memberships.
+  const std::vector<RelationMemberUtils::RelationRole>& element1RelationsWithRoles =
+    RelationMemberUtils::getOwningRelationsWithRoles(map, eid1);
+  const std::vector<RelationMemberUtils::RelationRole>& element2RelationsWithRoles =
+    RelationMemberUtils::getOwningRelationsWithRoles(map, eid2);
+
   // split w2 into sublines
   WaySublineMatchString match;
   try
@@ -270,8 +277,6 @@ bool HighwaySnapMerger::_mergePair(const OsmMapPtr& map, ElementId eid1, Element
     _markNeedsReview(result, e1, e2, e.getWhat(), HighwayMatch::getHighwayMatchName());
     return true;
   }
-  LOG_VART(match);
-
   if (!match.isValid())
   {
     LOG_TRACE("Complex conflict causes an empty match");
@@ -280,8 +285,8 @@ bool HighwaySnapMerger::_mergePair(const OsmMapPtr& map, ElementId eid1, Element
                      HighwayMatch::getHighwayMatchName());
     return true;
   }
+  LOG_TRACE("Matched subline: " << match);
 
-  LOG_VART(match.toString());
   ElementPtr e1Match;
   ElementPtr e2Match;
   ElementPtr scraps1;
@@ -360,10 +365,6 @@ bool HighwaySnapMerger::_mergePair(const OsmMapPtr& map, ElementId eid1, Element
   {
     e1Match->setTag(MetadataTags::HootMatchedBy(), _matchedBy);
   }
-
-  LOG_VART(e1Match->getElementType());
-  LOG_VART(e1->getElementId());
-  LOG_VART(e2->getElementId());
   if (_writeDebugMaps)
   {
     OsmMapWriterFactory::writeDebugMap(map, "HighwaySnapMerger-after-tag-merging" + eidLogString);
@@ -513,6 +514,7 @@ bool HighwaySnapMerger::_mergePair(const OsmMapPtr& map, ElementId eid1, Element
   // remove the old way that was split and snapped
   if (e1 != e1Match && scraps1)
   {
+    LOG_TRACE("Removing old way 1...");
     if (swapWayIds)
     {
       ElementId eidm1 = e1Match->getElementId();
@@ -531,17 +533,27 @@ bool HighwaySnapMerger::_mergePair(const OsmMapPtr& map, ElementId eid1, Element
         //  Update the scraps
         _updateScrapParent(result, e1Match->getId(), scraps1);
       }
+      if (_writeDebugMaps)
+      {
+        OsmMapWriterFactory::writeDebugMap(
+          map, "HighwaySnapMerger-after-swapping-e1-match-with-e1" + eidLogString);
+      }
     }
     else if (scraps1)
     {
       LOG_TRACE("Replacing e1: " << eid1 << " with scraps1: " << scraps1->getElementId() << "...");
       ReplaceElementOp(eid1, scraps1->getElementId(), true).apply(result);
+      if (_writeDebugMaps)
+      {
+        OsmMapWriterFactory::writeDebugMap(
+          map, "HighwaySnapMerger-after-replacing-e1-with-scraps" + eidLogString);
+      }
     }
   }
   else
   {
-    // remove any reviews that contain this element.
-    LOG_TRACE("Removing e1: " << eid1 << "...");
+    // Remove any reviews that contain this element.
+    LOG_TRACE("Removing reviews for e1: " << eid1 << "...");
     RemoveReviewsByEidOp(eid1, true).apply(result);
   }
   if (_writeDebugMaps)
@@ -550,6 +562,7 @@ bool HighwaySnapMerger::_mergePair(const OsmMapPtr& map, ElementId eid1, Element
       map, "HighwaySnapMerger-after-old-way-removal-1" + eidLogString);
   }
 
+  LOG_TRACE("Removing old way 2...");
   // If there is something left to review against,
   if (scraps2)
   {
@@ -560,14 +573,19 @@ bool HighwaySnapMerger::_mergePair(const OsmMapPtr& map, ElementId eid1, Element
     map->addElement(scraps2);
     ReplaceElementOp(e2Match->getElementId(), scraps2->getElementId(), true).apply(result);
     ReplaceElementOp(eid2, scraps2->getElementId(), true).apply(result);
+    if (_writeDebugMaps)
+    {
+      OsmMapWriterFactory::writeDebugMap(
+        map, "HighwaySnapMerger-after-replacing-e2-match-with-scraps-2" + eidLogString);
+    }
   }
   // Otherwise, drop the element and any reviews its in.
   else
   {
     LOG_TRACE("Removing e2 match: " << e2Match->getElementId() << " and e2: " << eid2 << "...");
 
-    // add any informational nodes from the ways being replaced to the merged output before deleting
-    // them
+    // Add any informational nodes from the ways being replaced to the merged output before deleting
+    // them.
     WayNodeCopier nodeCopier;
     nodeCopier.setOsmMap(map.get());
     nodeCopier.addCriterion(NotCriterionPtr(new NotCriterion(new NoInformationCriterion())));
@@ -589,13 +607,26 @@ bool HighwaySnapMerger::_mergePair(const OsmMapPtr& map, ElementId eid1, Element
       nodeCopier.copy(e2Match->getElementId(), e1Match->getElementId());
     }
 
+    if (_writeDebugMaps)
+    {
+      OsmMapWriterFactory::writeDebugMap(
+        map, "HighwaySnapMerger-after-copying-nodes" + eidLogString);
+    }
+
     // remove reviews e2Match is involved in
     RemoveReviewsByEidOp(e2Match->getElementId(), true).apply(result);
 
-    // Make the way that we're keeping has membership in whatever relations the way we're removing
+    // Make the way that we're keeping have membership in whatever relations the way we're removing
     // was in. I *think* this makes sense. This logic may also need to be replicated elsewhere
-    // during merging. TODO: we may be able to combine the following two removals into a single one
+    // during merging.
+    // TODO: we may be able to combine the following two removals into a single one
+    // TODO: _restoreRelationMembership may have made this swap obsolete
     RelationMemberSwapper::swap(eid2, eid1, map, false);
+    if (_writeDebugMaps)
+    {
+      OsmMapWriterFactory::writeDebugMap(
+        map, "HighwaySnapMerger-after-swapping-relation-membership" + eidLogString);
+    }
 
     // remove reviews e2 is involved in
     RemoveReviewsByEidOp(eid2, true).apply(result);
@@ -605,6 +636,42 @@ bool HighwaySnapMerger::_mergePair(const OsmMapPtr& map, ElementId eid1, Element
     OsmMapWriterFactory::writeDebugMap(
       map, "HighwaySnapMerger-after-old-way-removal-2" + eidLogString);
   }
+
+//  LOG_VART(replaced.size());
+//  for (std::vector<pair<ElementId, ElementId>>::const_iterator it = replaced.begin();
+//       it != replaced.end(); ++it)
+//  {
+//    std::pair<ElementId, ElementId> replacementPair = *it;
+//    LOG_VART(replacementPair.first);
+//    if (replacementPair.first == eid1)
+//    {
+//      for (std::vector<RelationMemberUtils::RelationRole>::const_iterator it =
+//             element1RelationsWithRoles.begin();
+//           it != element1RelationsWithRoles.end(); ++it)
+//      {
+//        RelationMemberUtils::RelationRole relationRole = *it;
+//        LOG_VART(replacementPair.second);
+//        LOG_VART(relationRole.relation->getElementId());
+//        LOG_VART(relationRole.role);
+//        relationRole.relation->addElement(relationRole.role, replacementPair.second);
+//      }
+//    }
+//    else if (replacementPair.first == eid2)
+//    {
+//      for (std::vector<RelationMemberUtils::RelationRole>::const_iterator it =
+//             element2RelationsWithRoles.begin();
+//           it != element2RelationsWithRoles.end(); ++it)
+//      {
+//        RelationMemberUtils::RelationRole relationRole = *it;
+//        LOG_VART(replacementPair.second);
+//        LOG_VART(relationRole.relation->getElementId());
+//        LOG_VART(relationRole.role);
+//        relationRole.relation->addElement(relationRole.role, replacementPair.second);
+//      }
+//    }
+//  }
+  _restoreRelationMembership(eid1, replaced, element1RelationsWithRoles);
+  _restoreRelationMembership(eid2, replaced, element2RelationsWithRoles);
 
   if (e1Match)
   {
@@ -650,6 +717,31 @@ bool HighwaySnapMerger::_mergePair(const OsmMapPtr& map, ElementId eid1, Element
   LOG_VART(replaced);
 
   return false;
+}
+
+void HighwaySnapMerger::_restoreRelationMembership(
+  const ElementId& originalId, const std::vector<pair<ElementId, ElementId>>& replaced,
+  const std::vector<RelationMemberUtils::RelationRole>& relationInfo)
+{
+  LOG_VART(replaced.size());
+  for (std::vector<pair<ElementId, ElementId>>::const_iterator it = replaced.begin();
+       it != replaced.end(); ++it)
+  {
+    std::pair<ElementId, ElementId> replacementPair = *it;
+    LOG_VART(replacementPair.first);
+    if (replacementPair.first == originalId)
+    {
+      for (std::vector<RelationMemberUtils::RelationRole>::const_iterator it = relationInfo.begin();
+           it != relationInfo.end(); ++it)
+      {
+        RelationMemberUtils::RelationRole relationRole = *it;
+        LOG_VART(replacementPair.second);
+        LOG_VART(relationRole.relation->getElementId());
+        LOG_VART(relationRole.role);
+        relationRole.relation->addElement(relationRole.role, replacementPair.second);
+      }
+    }
+  }
 }
 
 void HighwaySnapMerger::_removeSpans(OsmMapPtr map, const ElementPtr& e1,
@@ -863,10 +955,14 @@ void HighwaySnapMerger::_splitElement(const OsmMapPtr& map, const WaySublineColl
   const vector<bool>& reverse, vector<pair<ElementId, ElementId>>& replaced,
   const ConstElementPtr& splitee, ElementPtr& match, ElementPtr& scrap) const
 {
-  LOG_VART(splitee->getElementId());
+  LOG_TRACE("Splitting " << splitee->getElementId() << "...");
 
+  // split the ways
   MultiLineStringSplitter(_markAddedMultilineStringRelations).split(map, s, reverse, match, scrap);
-
+  if (_writeDebugMaps)
+  {
+    OsmMapWriterFactory::writeDebugMap(map, "HighwaySnapMerger-after-multilinestring-splitting");
+  }
   LOG_VART(match->getElementId());
 
   vector<ConstWayPtr> waysV = WaysVisitor::extractWays(map, splitee);
@@ -916,6 +1012,11 @@ void HighwaySnapMerger::_splitElement(const OsmMapPtr& map, const WaySublineColl
       r->addElement("", *it);
     }
     LOG_VART(r->getElementId());
+
+    if (_writeDebugMaps)
+    {
+      OsmMapWriterFactory::writeDebugMap(map, "HighwaySnapMerger-after-creating-scrap-relation");
+    }
   }
 
   match->setTags(splitee->getTags());
@@ -963,6 +1064,12 @@ void HighwaySnapMerger::_splitElement(const OsmMapPtr& map, const WaySublineColl
       scrap = r;
       LOG_TRACE("Created multilinestring relation for footway: " << r->getElementId());
       map->addElement(r);
+
+      if (_writeDebugMaps)
+      {
+        OsmMapWriterFactory::writeDebugMap(
+          map, "HighwaySnapMerger-after-creating-multilinestring-relation");
+      }
     }
     /*
      * In this example we have a road that is split into two roads and a new relation is created for
@@ -989,6 +1096,10 @@ void HighwaySnapMerger::_splitElement(const OsmMapPtr& map, const WaySublineColl
           " belonging to : " << r->getElementId() << "...");
         map->getElement(r->getMembers()[i].getElementId())->getTags().clear();
       }
+      if (_writeDebugMaps)
+      {
+        OsmMapWriterFactory::writeDebugMap(map, "HighwaySnapMerger-after-removing-child-tags");
+      }
     }
 
     bool multiLineStringAdded = false;
@@ -1010,6 +1121,10 @@ void HighwaySnapMerger::_splitElement(const OsmMapPtr& map, const WaySublineColl
       scrap->getTags().set(MetadataTags::HootMultilineString(), "yes");
     }
     //LOG_VART(scrap);
+    if (_writeDebugMaps)
+    {
+      OsmMapWriterFactory::writeDebugMap(map, "HighwaySnapMerger-after-setting-scrap-tags");
+    }
 
     replaced.push_back(
       std::pair<ElementId, ElementId>(splitee->getElementId(), scrap->getElementId()));

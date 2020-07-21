@@ -46,6 +46,12 @@ class RelationMemberUtils
 
 public:
 
+  struct RelationRole
+  {
+    QString role;
+    RelationPtr relation;
+  };
+
   /**
    * Get a detailed string representing a relation's members
    *
@@ -146,24 +152,55 @@ public:
     const ConstRelationPtr& relation, const ElementCriterion& criterion, const ConstOsmMapPtr& map);
 
   /**
+   * Determines if an element is part of a relation that satisifies some criteria
    *
-   *
-   * @param map
-   * @param childId
-   * @param criterion
-   * @return
+   * @param map map owning the element
+   * @param childId ID of the element
+   * @param criterion criteria that the owning relation must satisfy
+   * @return true if the element with the input ID belongs to a relation satisfying the specified
+   * criteria; false otherwise
    */
   static bool isMemberOfRelationSatisfyingCriterion(
     const ConstOsmMapPtr& map, const ElementId& childId, const ElementCriterion& criterion);
 
   /**
+   * Returns all relations owning an element
    *
-   *
-   * @param map
-   * @param childId
-   * @return
+   * @param map map owning the element
+   * @param childId ID of the element
+   * @return a collection of relations
    */
-  static std::vector<ConstRelationPtr> getContainingRelations(
+  static std::vector<ConstRelationPtr> getOwningRelations(
+    const ConstOsmMapPtr& map, const ElementId& childId);
+
+  /**
+   * Returns all relations owning an element
+   *
+   * @param map map owning the element
+   * @param childId ID of the element
+   * @return a collection of relations
+   */
+  static std::vector<RelationPtr> getOwningRelations(
+    const OsmMapPtr& map, const ElementId& childId);
+
+  /**
+   * Returns all relations owning an element and the role of the element within the relation
+   *
+   * @param map map owning the element
+   * @param childId ID of the element
+   * @return a collection of relations with roles
+   */
+  static std::vector<RelationRole> getOwningRelationsWithRoles(
+    const OsmMapPtr& map, const ElementId& childId);
+
+  /**
+   * Returns the IDs of all relations owning an element
+   *
+   * @param map map owning the element
+   * @param childId ID of the element
+   * @return a collection of IDs
+   */
+  static std::set<long> getOwningRelationIds(
     const ConstOsmMapPtr& map, const ElementId& childId);
 
   /**
@@ -201,6 +238,16 @@ public:
    * @return a count
    */
   static int getMemberWayNodeCount(const ConstRelationPtr& relation, const ConstOsmMapPtr& map);
+
+  /**
+   * Adds a child element as a member to one or more relations
+   *
+   * @param childId ID of the element to add
+   * @param role relation role of the element to add
+   * @param relations relations to add the element to as a member
+   */
+  static void addMembership(const ElementId& childId, const QString& role,
+                            const std::vector<RelationPtr>& relations);
 };
 
 }

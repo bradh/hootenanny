@@ -35,6 +35,7 @@ namespace hoot
 {
 
 class WaySublineCollection;
+class RelationRole;
 
 /**
  * Merges linear geometries and tags
@@ -124,6 +125,13 @@ private:
   bool _doesWayConnect(long node1, long node2, const ConstWayPtr& w) const;
 
   void _updateScrapParent(const OsmMapPtr& map, long id, const ElementPtr& scrap);
+
+  /*
+   * TODO
+   */
+  void _restoreRelationMembership(
+    const ElementId& originalId, const std::vector<pair<ElementId, ElementId>>& replaced,
+    const std::vector<RelationMemberUtils::RelationRole>& relationInfo);
 
   // for white box testing.
   friend class HighwaySnapMergerTest;

@@ -74,7 +74,6 @@ inline uint qHash(const RelationMemberComparison& memberComp)
   return qHash(memberComp.toHashString());
 }
 
-
 }
 
 #endif // RELATION_MEMBER_COMPARISON_H
