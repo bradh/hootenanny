@@ -86,9 +86,10 @@ struct BoundsOptions
 };
 
 /**
- * High level class for prepping data for replacement changeset generation (changesets which
- * replace features inside of a specified bounds) and then calls on the appropriate changeset file
- * writer to output a changeset file.
+ * High level class for prepping data for cut and replace (changesets which replace features inside
+ * of a specified bounds) or cut only (changesets which remove features inside of a specified
+ * bounds) changeset generation  and then calls on the appropriate changeset file writer to output
+ * a changeset file.
  *
  * This class uses a customized workflow that depends upon the feature type the changeset is being
  * generated for, whether all the reference features or just those that overlap secondary features
@@ -128,16 +129,26 @@ public:
    * Creates a changeset that replaces features in the first input with features from the second
    * input.
    *
-   * @param input1 the target data for the changeset in which to replace features; must support
-   * Boundable
-   * @param input2 the source data for the changeset to get replacement features from; must support
-   * Boundable
+   * @param dataToReplaceUrl the URL to the target data for the changeset in which to replace
+   * features; must support Boundable
+   * @param replacementDataUrl the URL to the source data for the changeset to get replacement
+   * features from; must support Boundable
    * @param bounds the bounds over which features are to be replaced
    * @param output the changeset file output locationn
    */
   void create(
-    const QString& input1, const QString& input2, const geos::geom::Envelope& bounds,
-    const QString& output);
+    const QString& dataToReplaceUrl, const QString& replacementDataUrl,
+    const geos::geom::Envelope& bounds, const QString& output);
+
+  /**
+   * TODO
+   *
+   * @param dataToRemoveUrl
+   * @param bounds
+   * @param output
+   */
+  void create(const QString& dataToRemoveUrl, const geos::geom::Envelope& bounds,
+              const QString& output);
 
   void setFullReplacement(const bool full) { _fullReplacement = full; }
   void setLenientBounds(const bool lenient) { _lenientBounds = lenient; }
@@ -220,10 +231,10 @@ private:
 
   bool _isNetworkConflate() const;
 
-  void _validateInputs(const QString& input1, const QString& input2);
+  void _validateInputs(const QString& dataToReplace, const QString& replacementData);
 
   QString _getJobDescription(
-    const QString& input1, const QString& input2, const QString& bounds,
+    const QString& dataToReplace, const QString& replacementData, const QString& bounds,
     const QString& output) const;
 
   /*
@@ -334,9 +345,9 @@ private:
    * can then used to derive the replacement changeset.
    */
   void _getMapsForGeometryType(
-    OsmMapPtr& refMap, OsmMapPtr& conflatedMap, const QString& input1, const QString& input2,
-    const QString& boundsStr, const ElementCriterionPtr& refFeatureFilter,
-    const ElementCriterionPtr& secFeatureFilter,
+    OsmMapPtr& refMap, OsmMapPtr& conflatedMap, const QString& dataToReplace,
+    const QString& replacementData, const QString& boundsStr,
+    const ElementCriterionPtr& refFeatureFilter, const ElementCriterionPtr& secFeatureFilter,
     const GeometryTypeCriterion::GeometryType& geometryType,
     const QStringList& linearFilterClassNames = QStringList());
 

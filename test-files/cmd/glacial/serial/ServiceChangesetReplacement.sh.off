@@ -12,8 +12,9 @@ set -e
 
 # Input Parameters (see changeset-derive-replacement command doc for more detail):
 # 1 - test name
-# 2 - ref input file path
-# 3 - sec input file path
+# 2 - ref input file path - data to replace or remove
+# 3 - sec input file path - replacement data; If this is blank, then secondary data gets auto-generated via perturbation. If this is set 
+#                           to "empty", then a cut only operation is performed.
 # 4 - replacement aoi - what section is being replaced; e.g. "-180,-90,180,90
 # 5 - crop aoi - an initial aoi to crop both datasets down to in order to save processing time; use global bounds to bypass: "-180,-90,180,90
 # 6 - full replacement (not just overlapping features); true or false
@@ -21,7 +22,8 @@ set -e
 # 8 - geometry filters - what types of geometries are being replaced?; delimited ElementCriterion class name list; leave empty to bypass
 # 9 - replacement filters - what types of features are we removing?; delimited ElementCriterion class name list; leave empty to bypass
 # 10 - chain replacement filters together (logical AND)?; true or false
-# 11 - replacement filter options - semicolon delimited list of config opts to be applied to the replacement filters only; leave empty to bypass
+# 11 - replacement filter options - semicolon delimited list of config opts to be applied to the replacement filters only; leave empty to 
+#                                   bypass; not valid for cut only operations
 # 12 - retainment filters - what types of features are we keeping?; delimited ElementCriterion class name list; leave empty to bypass
 # 13 - chain retainment filters together (logical AND)?; true or false
 # 14 - retainment filter options - semicolon delimited list of config opts to be applied to the retainment filters only; leave empty to bypass
@@ -56,6 +58,7 @@ if [ "$SOURCE_FILE_2" == "" ]; then
     SEC_CONVERT_OPS="hoot::MapCropper;hoot::SetTagValueVisitor"
   fi
   PERTURBING_REF="true"
+elif [ "$SOURCE_FILE_2" == "empty" ]; then
 else
   if [ "$CROP_OPTS" == "" ]; then
     REF_CONVERT_OPS="hoot::SetTagValueVisitor"
@@ -211,22 +214,30 @@ if [[ $SOURCE_FORMATS == *"db"* ]]; then
   # other workflows below.
   hoot convert $LOG_LEVEL $GENERAL_OPTS $DB_OPTS $CROP_OPTS $PERTY_OPTS -D debug.maps.filename=$OUT_DIR/data-prep-ref-db.osm -D reader.use.data.source.ids=false -D id.generator=hoot::PositiveIdGenerator -D convert.ops=$REF_CONVERT_OPS -D set.tag.value.visitor.element.criteria=$TAG_ELEMENT_CRITERIA -D set.tag.value.visitor.keys=$CUSTOM_TAG_KEY -D set.tag.value.visitor.values=$CUSTOM_TAG_VAL" 1" $SOURCE_FILE_1 $REF_DB_INPUT 
   echo ""
-  if [[ "$CROP_OPTS" == "" ]]; then
+  if [[ "$SOURCE_FILE_2" == "empty" ]]; then
+  elif [[ "$CROP_OPTS" == "" ]]; then
     echo "Writing the secondary dataset from: $SOURCE_FILE_2 to a hoot api db (contains features to replace with)..."
   else
     echo "Cropping the secondary dataset from: $SOURCE_FILE_2 to: $CROP_AOI, then writing it to a hoot api db (contains features to replace with)..."
   fi
   echo ""
-  # Note that we're throwing out source ids here and treating the secondary data as new data in order to avoid possible id conflicts with the
-  # reference, since both may have been derived from the same input data if perturbation is being used.
-  hoot convert $LOG_LEVEL $GENERAL_OPTS $DB_OPTS $CROP_OPTS -D debug.maps.filename=$OUT_DIR/data-prep-sec-db.osm -D reader.use.data.source.ids=false -D convert.ops=$SEC_CONVERT_OPS -D set.tag.value.visitor.element.criteria=$TAG_ELEMENT_CRITERIA -D set.tag.value.visitor.keys=$CUSTOM_TAG_KEY -D set.tag.value.visitor.values=$CUSTOM_TAG_VAL" 2" $SOURCE_FILE_2 $SEC_DB_INPUT
+  if [[ "$SOURCE_FILE_2" == "empty" ]]; then
+  else
+    # Note that we're throwing out source ids here and treating the secondary data as new data in order to avoid possible id conflicts with the
+    # reference, since both may have been derived from the same input data if perturbation is being used.
+    hoot convert $LOG_LEVEL $GENERAL_OPTS $DB_OPTS $CROP_OPTS -D debug.maps.filename=$OUT_DIR/data-prep-sec-db.osm -D reader.use.data.source.ids=false -D convert.ops=$SEC_CONVERT_OPS -D set.tag.value.visitor.element.criteria=$TAG_ELEMENT_CRITERIA -D set.tag.value.visitor.keys=$CUSTOM_TAG_KEY -D set.tag.value.visitor.values=$CUSTOM_TAG_VAL" 2" $SOURCE_FILE_2 $SEC_DB_INPUT
+  fi
 
   # CHANGESET DERIVATION
 
   echo ""
   echo "Deriving a changeset between the osm api db and the hoot api db layers over: $REPLACEMENT_AOI, to file: $CHANGESET_DB that replaces features in the reference dataset with those from a secondary dataset..."
   echo ""
-  hoot changeset-derive-replacement $LOG_LEVEL $GENERAL_OPTS $DB_OPTS $CHANGESET_DERIVE_OPTS -D debug.maps.filename=$OUT_DIR/changeset-derive-db.osm $REF_DB_INPUT $SEC_DB_INPUT $REPLACEMENT_AOI $CHANGESET_DB $REF_DB_INPUT $FULL_REPLACEMENT $STRICT_BOUNDS $GEOMETRY_FILTERS $REPLACEMENT_FILTERS $CHAIN_REPLACEMENT_FILTERS $REPLACEMENT_FILTER_OPTIONS --write-bounds $DISABLE_CONFLATION
+  if [[ "$SOURCE_FILE_2" == "empty" ]]; then
+    hoot changeset-derive-replacement $LOG_LEVEL $GENERAL_OPTS $DB_OPTS $CHANGESET_DERIVE_OPTS -D debug.maps.filename=$OUT_DIR/changeset-derive-db.osm $REF_DB_INPUT $REPLACEMENT_AOI $CHANGESET_DB $REF_DB_INPUT $FULL_REPLACEMENT $STRICT_BOUNDS $GEOMETRY_FILTERS --write-bounds $DISABLE_CONFLATION
+  else
+    hoot changeset-derive-replacement $LOG_LEVEL $GENERAL_OPTS $DB_OPTS $CHANGESET_DERIVE_OPTS -D debug.maps.filename=$OUT_DIR/changeset-derive-db.osm $REF_DB_INPUT $SEC_DB_INPUT $REPLACEMENT_AOI $CHANGESET_DB $REF_DB_INPUT $FULL_REPLACEMENT $STRICT_BOUNDS $GEOMETRY_FILTERS $REPLACEMENT_FILTERS $CHAIN_REPLACEMENT_FILTERS $REPLACEMENT_FILTER_OPTIONS --write-bounds $DISABLE_CONFLATION
+  fi
 
   # CHANGESET APPLICATION
 
@@ -245,7 +256,10 @@ if [[ $SOURCE_FORMATS == *"db"* ]]; then
 
   # CLEANUP
 
-  hoot db-delete-map $LOG_LEVEL $GENERAL_OPTS $DB_OPTS -D debug.maps.filename=$OUT_DIR/cleanup-db.osm $SEC_DB_INPUT
+  if [[ "$SOURCE_FILE_2" == "empty" ]]; then
+  else
+    hoot db-delete-map $LOG_LEVEL $GENERAL_OPTS $DB_OPTS -D debug.maps.filename=$OUT_DIR/cleanup-db.osm $SEC_DB_INPUT
+  fi
 
 fi
 
@@ -283,22 +297,30 @@ if [[ $SOURCE_FORMATS == *"xml"* ]]; then
   echo ""
   hoot convert $LOG_LEVEL $GENERAL_OPTS $DB_OPTS -D debug.maps.filename=$OUT_DIR/data-prep-ref-xml.osm -D reader.use.data.source.ids=true $REF_DB_INPUT $REF_XML_INPUT
   echo ""
-  if [[ "$CROP_OPTS" == "" ]]; then
+  if [[ "$SOURCE_FILE_2" == "empty" ]]; then
+  elif [[ "$CROP_OPTS" == "" ]]; then
     echo "Writing the secondary dataset from: $SOURCE_FILE_2 to an xml file: $SEC_XML_INPUT (contains features to replace with)..."
   else
     echo "Cropping the secondary dataset from: $SOURCE_FILE_2 to: $CROP_AOI, then writing it to an xml file: $SEC_XML_INPUT (contains features to replace with)..."
   fi
   echo ""
-  hoot convert $LOG_LEVEL $GENERAL_OPTS $CROP_OPTS -D debug.maps.filename=$OUT_DIR/data-prep-sec-xml.osm -D reader.use.data.source.ids=false -D convert.ops=$SEC_CONVERT_OPS -D set.tag.value.visitor.element.criteria=$TAG_ELEMENT_CRITERIA -D set.tag.value.visitor.keys=$CUSTOM_TAG_KEY -D set.tag.value.visitor.values=$CUSTOM_TAG_VAL" 2" $SOURCE_FILE_2 $SEC_XML_INPUT
+  if [[ "$SOURCE_FILE_2" == "empty" ]]; then
+  else
+    hoot convert $LOG_LEVEL $GENERAL_OPTS $CROP_OPTS -D debug.maps.filename=$OUT_DIR/data-prep-sec-xml.osm -D reader.use.data.source.ids=false -D convert.ops=$SEC_CONVERT_OPS -D set.tag.value.visitor.element.criteria=$TAG_ELEMENT_CRITERIA -D set.tag.value.visitor.keys=$CUSTOM_TAG_KEY -D set.tag.value.visitor.values=$CUSTOM_TAG_VAL" 2" $SOURCE_FILE_2 $SEC_XML_INPUT
   # To get a test more accurate to the production environment, use this instead of the line above.
   #hoot convert $LOG_LEVEL $GENERAL_OPTS $CROP_OPTS -D debug.maps.filename=$OUT_DIR/data-prep-sec-xml.osm $SOURCE_FILE_2 $SEC_XML_INPUT
+  fi
 
   # CHANGESET DERIVATION
 
   echo ""
   echo "Deriving a changeset between $REF_XML_INPUT and $SEC_XML_INPUT over: $REPLACEMENT_AOI, to file: $CHANGESET_XML that replaces features in the reference dataset with those from a secondary dataset..."
   echo ""
-  hoot changeset-derive-replacement $LOG_LEVEL $GENERAL_OPTS $CHANGESET_DERIVE_OPTS -D debug.maps.filename=$OUT_DIR/changeset-derive-xml.osm $REF_XML_INPUT $SEC_XML_INPUT $REPLACEMENT_AOI $CHANGESET_XML $REF_DB_INPUT $FULL_REPLACEMENT $STRICT_BOUNDS $GEOMETRY_FILTERS $REPLACEMENT_FILTERS $CHAIN_REPLACEMENT_FILTERS $REPLACEMENT_FILTER_OPTIONS --write-bounds $DISABLE_CONFLATION
+  if [[ "$SOURCE_FILE_2" == "empty" ]]; then
+    hoot changeset-derive-replacement $LOG_LEVEL $GENERAL_OPTS $CHANGESET_DERIVE_OPTS -D debug.maps.filename=$OUT_DIR/changeset-derive-xml.osm $REF_XML_INPUT $REPLACEMENT_AOI $CHANGESET_XML $REF_DB_INPUT $FULL_REPLACEMENT $STRICT_BOUNDS $GEOMETRY_FILTERS --write-bounds $DISABLE_CONFLATION
+  else
+    hoot changeset-derive-replacement $LOG_LEVEL $GENERAL_OPTS $CHANGESET_DERIVE_OPTS -D debug.maps.filename=$OUT_DIR/changeset-derive-xml.osm $REF_XML_INPUT $SEC_XML_INPUT $REPLACEMENT_AOI $CHANGESET_XML $REF_DB_INPUT $FULL_REPLACEMENT $STRICT_BOUNDS $GEOMETRY_FILTERS $REPLACEMENT_FILTERS $CHAIN_REPLACEMENT_FILTERS $REPLACEMENT_FILTER_OPTIONS --write-bounds $DISABLE_CONFLATION
+  fi
 
   # CHANGESET APPLICATION
 
@@ -346,20 +368,28 @@ if [[ $SOURCE_FORMATS == *"json"* ]]; then
   echo ""
   hoot convert $LOG_LEVEL $GENERAL_OPTS $DB_OPTS -D debug.maps.filename=$OUT_DIR/data-prep-ref-json.osm -D reader.use.data.source.ids=true $REF_DB_INPUT $REF_JSON_INPUT
   echo ""
-  if [[ "$CROP_OPTS" == "" ]]; then
+  if [[ "$SOURCE_FILE_2" == "empty" ]]; then
+  elif [[ "$CROP_OPTS" == "" ]]; then
     echo "Writing the secondary dataset from: $SOURCE_FILE_2 to a json file: $SEC_JSON_INPUT (contains features to replace with)..."
   else
     echo "Cropping the secondary dataset from: $SOURCE_FILE_2 to: $CROP_AOI, then writing it to a json file: $SEC_JSON_INPUT (contains features to replace with)..."
   fi
   echo ""
-  hoot convert $LOG_LEVEL $GENERAL_OPTS $CROP_OPTS -D debug.maps.filename=$OUT_DIR/data-prep-sec-json.osm -D reader.use.data.source.ids=false -D convert.ops=$SEC_CONVERT_OPS -D set.tag.value.visitor.element.criteria=$TAG_ELEMENT_CRITERIA -D set.tag.value.visitor.keys=$CUSTOM_TAG_KEY -D set.tag.value.visitor.values=$CUSTOM_TAG_VAL" 2" $SOURCE_FILE_2 $SEC_JSON_INPUT
+  if [[ "$SOURCE_FILE_2" == "empty" ]]; then
+  else
+    hoot convert $LOG_LEVEL $GENERAL_OPTS $CROP_OPTS -D debug.maps.filename=$OUT_DIR/data-prep-sec-json.osm -D reader.use.data.source.ids=false -D convert.ops=$SEC_CONVERT_OPS -D set.tag.value.visitor.element.criteria=$TAG_ELEMENT_CRITERIA -D set.tag.value.visitor.keys=$CUSTOM_TAG_KEY -D set.tag.value.visitor.values=$CUSTOM_TAG_VAL" 2" $SOURCE_FILE_2 $SEC_JSON_INPUT
+  fi
 
   # CHANGESET DERIVATION
 
   echo ""
   echo "Deriving a changeset between $REF_JSON_INPUT and $SEC_JSON_INPUT over: $REPLACEMENT_AOI, to file: $CHANGESET_JSON that replaces features in the reference dataset with those from a secondary dataset..."
   echo ""
-  hoot changeset-derive-replacement $LOG_LEVEL $GENERAL_OPTS $CHANGESET_DERIVE_OPTS -D debug.maps.filename=$OUT_DIR/changeset-derive-json.osm $REF_JSON_INPUT $SEC_JSON_INPUT $REPLACEMENT_AOI $CHANGESET_JSON $REF_DB_INPUT $FULL_REPLACEMENT $STRICT_BOUNDS $GEOMETRY_FILTERS $REPLACEMENT_FILTERS $CHAIN_REPLACEMENT_FILTERS $REPLACEMENT_FILTER_OPTIONS --write-bounds $DISABLE_CONFLATION
+  if [[ "$SOURCE_FILE_2" == "empty" ]]; then
+    hoot changeset-derive-replacement $LOG_LEVEL $GENERAL_OPTS $CHANGESET_DERIVE_OPTS -D debug.maps.filename=$OUT_DIR/changeset-derive-json.osm $REF_JSON_INPUT $REPLACEMENT_AOI $CHANGESET_JSON $REF_DB_INPUT $FULL_REPLACEMENT $STRICT_BOUNDS $GEOMETRY_FILTERS --write-bounds $DISABLE_CONFLATION
+  else
+    hoot changeset-derive-replacement $LOG_LEVEL $GENERAL_OPTS $CHANGESET_DERIVE_OPTS -D debug.maps.filename=$OUT_DIR/changeset-derive-json.osm $REF_JSON_INPUT $SEC_JSON_INPUT $REPLACEMENT_AOI $CHANGESET_JSON $REF_DB_INPUT $FULL_REPLACEMENT $STRICT_BOUNDS $GEOMETRY_FILTERS $REPLACEMENT_FILTERS $CHAIN_REPLACEMENT_FILTERS $REPLACEMENT_FILTER_OPTIONS --write-bounds $DISABLE_CONFLATION
+  fi
 
   # CHANGESET APPLICATION
 

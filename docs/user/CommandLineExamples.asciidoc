@@ -77,6 +77,13 @@ See the User Guide for more details on command usage.
     hoot changeset-apply changeset.osc http://railsPortUrl --stats --progress
 -----
 
+===== Create a changeset that removes all features within a specified bounds:
+
+-----
+    hoot changeset-derive-replacement -D changeset.user.id=1 input.osm "-71.4698,42.4866,-71.4657,42.4902" \
+      output.osc
+-----
+
 ===== Create a changeset that replaces features with only overlapping features from another dataset within a specified bounds:
 
 -----

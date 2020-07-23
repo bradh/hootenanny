@@ -220,6 +220,10 @@ public:
     }
     LOG_VARD(tagOobConnectedWays);
 
+    // TODO: throw error if specifying replacement filters during a cut only
+    // TODO: log warning if not specifying full replacement for a cut only ?
+    // TODO: log warning if specifying conflation for a cut only ?
+
     QString boundsStr = "";
     if (args.size() >= 3)
     {

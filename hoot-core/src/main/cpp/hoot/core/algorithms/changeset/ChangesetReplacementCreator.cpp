@@ -289,7 +289,7 @@ void ChangesetReplacementCreator::setReplacementFilterOptions(const QStringList&
 }
 
 QString ChangesetReplacementCreator::_getJobDescription(
-  const QString& input1, const QString& input2, const QString& bounds,
+  const QString& dataToReplaceUrl, const QString& replacementDataUrl, const QString& bounds,
   const QString& output) const
 {
   const int maxFilePrintLength = ConfigOptions().getProgressVarPrintLengthMax();
@@ -346,8 +346,15 @@ QString ChangesetReplacementCreator::_getJobDescription(
 
   QString str;
   str += "Deriving replacement output changeset:";
-  str += "\nBeing replaced: ..." + input1.right(maxFilePrintLength);
-  str += "\nReplacing with ..." + input2.right(maxFilePrintLength);
+  if (!replacementDataUrl.isEmpty())
+  {
+    str += "\nBeing replaced: ..." + dataToReplaceUrl.right(maxFilePrintLength);
+    str += "\nReplacing with ..." + replacementDataUrl.right(maxFilePrintLength);
+  }
+  else
+  {
+    str += "\nBeing removed: ..." + dataToReplaceUrl.right(maxFilePrintLength);
+  }
   str += "\nOutput Changeset: ..." + output.right(maxFilePrintLength);
   str += "\nBounds: " + bounds + lenientStr;
   str += "\nReplacement is: " + replacementTypeStr;
@@ -368,16 +375,22 @@ void ChangesetReplacementCreator::setRetainmentFilterOptions(const QStringList& 
 }
 
 void ChangesetReplacementCreator::create(
-  const QString& input1, const QString& input2, const geos::geom::Envelope& bounds,
-  const QString& output)
+  const QString& dataToRemoveUrl, const geos::geom::Envelope& bounds, const QString& output)
+{
+  create(dataToRemoveUrl, "", bounds, output);
+}
+
+void ChangesetReplacementCreator::create(
+  const QString& dataToReplaceUrl, const QString& replacementDataUrl,
+  const geos::geom::Envelope& bounds, const QString& output)
 {
   // INPUT VALIDATION AND SETUP
 
-  _validateInputs(input1, input2);
+  _validateInputs(dataToReplaceUrl, replacementDataUrl);
   const QString boundsStr = GeometryUtils::envelopeToConfigString(bounds);
   _setGlobalOpts(boundsStr);
 
-  LOG_DEBUG(_getJobDescription(input1, input2, boundsStr, output));
+  LOG_DEBUG(_getJobDescription(dataToReplaceUrl, replacementDataUrl, boundsStr, output));
 
   // If a retainment filter was specified, we'll AND it together with each geometry type filter to
   // further restrict what reference data gets replaced in the final changeset.
@@ -421,8 +434,8 @@ void ChangesetReplacementCreator::create(
     LOG_VARD(secFilter->toString());
 
     _getMapsForGeometryType(
-      refMap, conflatedMap, input1, input2, boundsStr, refFilter, secFilter, itr.key(),
-      linearFilterClassNames);
+      refMap, conflatedMap, dataToReplaceUrl, replacementDataUrl, boundsStr, refFilter, secFilter,
+      itr.key(), linearFilterClassNames);
 
     if (!refMap)
     {
@@ -500,9 +513,9 @@ void ChangesetReplacementCreator::create(
 }
 
 void ChangesetReplacementCreator::_getMapsForGeometryType(
-  OsmMapPtr& refMap, OsmMapPtr& conflatedMap, const QString& input1, const QString& input2,
-  const QString& boundsStr, const ElementCriterionPtr& refFeatureFilter,
-  const ElementCriterionPtr& secFeatureFilter,
+  OsmMapPtr& refMap, OsmMapPtr& conflatedMap, const QString& dataToReplaceUrl,
+  const QString& replacementDataUrl, const QString& boundsStr,
+  const ElementCriterionPtr& refFeatureFilter, const ElementCriterionPtr& secFeatureFilter,
   const GeometryTypeCriterion::GeometryType& geometryType,
   const QStringList& linearFilterClassNames)
 {
@@ -516,7 +529,7 @@ void ChangesetReplacementCreator::_getMapsForGeometryType(
   // DATA LOAD AND INITIAL PREP
 
   // load the ref dataset and crop to the specified aoi
-  refMap = _loadRefMap(input1);
+  refMap = _loadRefMap(dataToReplaceUrl);
   MemoryUsageChecker::getInstance().check();
 
   // always remove any existing missing child tags
@@ -553,7 +566,11 @@ void ChangesetReplacementCreator::_getMapsForGeometryType(
     "ref-after-" + GeometryTypeCriterion::typeToString(geometryType) + "-pruning");
 
   // load the sec dataset and crop to the specified aoi
-  OsmMapPtr secMap = _loadSecMap(input2);
+  OsmMapPtr secMap(new OsmMap());
+  if (!replacementDataUrl.isEmpty())  // If this is empty, its just a cut operation with no replace.
+  {
+    secMap = _loadSecMap(replacementDataUrl);
+  }
   MemoryUsageChecker::getInstance().check();
 
   secMap->visitRw(missingChildTagRemover);
@@ -562,11 +579,14 @@ void ChangesetReplacementCreator::_getMapsForGeometryType(
     _markElementsWithMissingChildren(secMap);
   }
 
-  // Prune the sec dataset down to just the feature types specified by the filter, so we don't end
-  // up modifying anything else.
-  _filterFeatures(
-    secMap, secFeatureFilter, _replacementFilterOptions,
-    "sec-after-" + GeometryTypeCriterion::typeToString(geometryType) + "-pruning");
+  if (!replacementDataUrl.isEmpty())
+  {
+    // Prune the sec dataset down to just the feature types specified by the filter, so we don't end
+    // up modifying anything else.
+    _filterFeatures(
+      secMap, secFeatureFilter, _replacementFilterOptions,
+      "sec-after-" + GeometryTypeCriterion::typeToString(geometryType) + "-pruning");
+  }
 
   const int refMapSize = refMap->size();
   // If the secondary dataset is empty here and the ref dataset isn't, then we'll end up with a
@@ -739,28 +759,35 @@ void ChangesetReplacementCreator::_getMapsForGeometryType(
   LOG_VART(conflatedMap->getElementCount());
 }
 
-void ChangesetReplacementCreator::_validateInputs(const QString& input1, const QString& input2)
+void ChangesetReplacementCreator::_validateInputs(const QString& dataToReplaceUrl,
+                                                  const QString& replacementDataUrl)
 {
   // Fail if the reader that supports either input doesn't implement Boundable.
   std::shared_ptr<Boundable> boundable =
-    std::dynamic_pointer_cast<Boundable>(OsmMapReaderFactory::createReader(input1));
+    std::dynamic_pointer_cast<Boundable>(OsmMapReaderFactory::createReader(dataToReplaceUrl));
   if (!boundable)
   {
     throw IllegalArgumentException(
       "Reader for " + input1 + " must implement Boundable for replacement changeset derivation.");
   }
-  boundable = std::dynamic_pointer_cast<Boundable>(OsmMapReaderFactory::createReader(input2));
-  if (!boundable)
+  if (!replacementDataUrl.isEmpty())
   {
-    throw IllegalArgumentException(
-      "Reader for " + input2 + " must implement Boundable for replacement changeset derivation.");
+    boundable =
+      std::dynamic_pointer_cast<Boundable>(OsmMapReaderFactory::createReader(replacementDataUrl));
+    if (!boundable)
+    {
+      throw IllegalArgumentException(
+        "Reader for " + replacementDataUrl + " must implement Boundable for replacement " +
+        "changeset derivation.");
+    }
   }
 
   // Fail for GeoJSON - GeoJSON coming from Overpass does not have way nodes, so their versions
   // are lost when new way nodes are added to existing ways. For that reason, we can't support it
   // (or at least not sure how to yet).
   OsmGeoJsonReader geoJsonReader;
-  if (geoJsonReader.isSupported(input1) || geoJsonReader.isSupported(input2))
+  if (geoJsonReader.isSupported(input1) ||
+      (!replacementDataUrl.isEmpty() && geoJsonReader.isSupported(replacementDataUrl)))
   {
     throw IllegalArgumentException(
       "GeoJSON inputs are not supported by replacement changeset derivation.");
