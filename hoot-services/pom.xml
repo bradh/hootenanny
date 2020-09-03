@@ -28,7 +28,7 @@
         <apache.commons.io.version>2.5</apache.commons.io.version>
         <apache.commons.lang3.version>3.1</apache.commons.lang3.version>
         <fasterxml-jackson.version>2.5.4</fasterxml-jackson.version>
-        <guava.version>24.1.1</guava.version>
+        <guava.version>24.1.1-jre</guava.version>
         <httpasyncclient.version>4.0</httpasyncclient.version>
         <httpclient.version>4.3.6</httpclient.version>
         <httpcore.version>4.3</httpcore.version>
